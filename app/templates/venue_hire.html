@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-12 col-lg-5">
+    <div class="card p-3">
+      <h5>Request Private Venue Hire</h5>
+      <p class="small text-muted">Routine requests (&le;4h, &le;100 guests) are auto-confirmed by <strong>VenueAgent</strong>. Peak/weekend slots carry a 1.25x multiplier.</p>
+      <form method="post" action="/venue-hire">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="mb-2">
+          <label class="form-label small">Venue</label>
+          <select name="venue_id" class="form-select" required>
+            {% for v in venues %}
+              <option value="{{ v.id }}">{{ v.name }} (Cap: {{ v.capacity }}, ${{ v.hourly_rate }}/hr)</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small">Start Time (UTC)</label>
+          <input type="datetime-local" name="start_time" class="form-control" required>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small">End Time (UTC)</label>
+          <input type="datetime-local" name="end_time" class="form-control" required>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small">Guest Count</label>
+          <input type="number" name="guest_count" min="1" value="40" class="form-control" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small">Purpose</label>
+          <input type="text" name="purpose" placeholder="e.g., CS Society Farewell" class="form-control" required>
+        </div>
+        <button class="btn btn-primary w-100">Submit to VenueAgent</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-7">
+    {% if proposal and proposal.alternatives %}
+    <div class="card p-3 mb-3 border-warning border-2">
+      <h6 class="text-warning-emphasis">VenueAgent Counter-Proposals (PROPOSE)</h6>
+      <p class="small mb-2">{{ proposal.reason }} — Click one of these available alternatives to book immediately:</p>
+      {% for alt in proposal.alternatives %}
+      <div class="border rounded p-2 mb-2 d-flex justify-content-between align-items-center flex-wrap gap-2 bg-light">
+        <div class="small">
+          <strong>{{ alt.venue_name }}</strong> ({{ alt.type|replace('_', ' ') }})<br>
+          {{ alt.start_time[:16] }} &rarr; {{ alt.end_time[:16] }} &bull; <strong>${{ "%.2f"|format(alt.quoted_price) }}</strong> ({{ alt.note }})
+        </div>
+        <form method="post" action="/venue-hire">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="venue_id" value="{{ alt.venue_id }}">
+          <input type="hidden" name="start_time" value="{{ alt.start_time[:16] }}">
+          <input type="hidden" name="end_time" value="{{ alt.end_time[:16] }}">
+          <input type="hidden" name="guest_count" value="{{ proposal.guest_count }}">
+          <input type="hidden" name="purpose" value="{{ proposal.purpose }}">
+          <button class="btn btn-sm btn-success">Accept Proposal</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="card p-3">
+      <h5>My Venue Hire Requests</h5>
+      {% for h in my_hires %}
+        <div class="border-top py-2">
+          <div class="d-flex justify-content-between">
+            <strong>{{ h.venue.name }} — {{ h.purpose }}</strong>
+            <span class="badge {% if h.status == 'CONFIRMED' %}bg-success{% elif h.status == 'ESCALATED' %}bg-warning text-dark{% else %}bg-danger{% endif %}">{{ h.status }}</span>
+          </div>
+          <div class="small text-muted">{{ h.start_time.strftime('%d %b %H:%M') }} - {{ h.end_time.strftime('%H:%M UTC') }} &bull; {{ h.guest_count }} guests &bull; ${{ "%.2f"|format(h.quoted_price) }}</div>
+          <div class="small text-secondary">{{ h.agent_notes }}</div>
+        </div>
+      {% else %}
+        <p class="small text-muted mb-0">No venue hire requests submitted yet.</p>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

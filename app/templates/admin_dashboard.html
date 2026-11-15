@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block content %}
+<h4 class="mb-3">Organiser Dashboard</h4>
+
+<div class="row g-3 mb-3">
+  <div class="col-12 col-lg-7">
+    <div class="card p-3 h-100">
+      <h6>Event Sales, Revenue & Check-ins</h6>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle small">
+          <thead>
+            <tr><th>Event</th><th>Status</th><th>Sold / Cap</th><th>Check-ins</th><th>Revenue</th><th>Action</th></tr>
+          </thead>
+          <tbody>
+            {% for st in event_stats %}
+            <tr>
+              <td><strong>{{ st.event.title }}</strong><br><span class="text-muted">{{ st.venue_name }}</span></td>
+              <td><span class="badge bg-secondary">{{ st.event.status }}</span></td>
+              <td>{{ st.sold }} / {{ st.capacity }}</td>
+              <td>{{ st.checked_in }}</td>
+              <td>${{ "%.2f"|format(st.revenue) }}</td>
+              <td>
+                {% if st.event.status == 'draft' %}
+                  <form method="post" action="/admin/events/{{ st.event.id }}/status" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" name="new_status" value="published">
+                    <button class="btn btn-sm btn-success">Publish</button>
+                  </form>
+                {% endif %}
+                {% if st.event.status != 'cancelled' %}
+                  <form method="post" action="/admin/events/{{ st.event.id }}/status" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" name="new_status" value="cancelled">
+                    <button class="btn btn-sm btn-outline-danger">Cancel</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-5">
+    <div class="card p-3 h-100">
+      <h6>Tickets Sold vs Check-ins</h6>
+      <canvas id="salesChart" height="190"
+        data-labels='{{ chart_labels | tojson }}'
+        data-sold='{{ chart_sold | tojson }}'
+        data-checked-in='{{ chart_checked_in | tojson }}'></canvas>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
+  <h6>Escalated Venue Hire Requests (Requires Admin Decision)</h6>
+  {% for h in escalated_hires %}
+    <div class="border-top py-2 small">
+      <strong>{{ h.venue.name if h.venue else 'Venue' }}</strong> &bull; {{ h.purpose }} ({{ h.guest_count }} guests, ${{ "%.2f"|format(h.quoted_price) }})<br>
+      <span class="text-muted">{{ h.start_time.strftime('%d %b %H:%M') }} - {{ h.end_time.strftime('%H:%M UTC') }}</span>
+      <div class="mt-1">
+        <form method="post" action="/admin/hires/{{ h.id }}/decide" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="decision" value="approve">
+          <button class="btn btn-sm btn-success">Approve</button>
+        </form>
+        <form method="post" action="/admin/hires/{{ h.id }}/decide" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="decision" value="reject">
+          <button class="btn btn-sm btn-danger">Reject</button>
+        </form>
+      </div>
+    </div>
+  {% else %}
+    <p class="small text-muted mb-0">No escalated venue hire requests pending.</p>
+  {% endfor %}
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-12 col-lg-6">
+    <div class="card p-3">
+      <h6>Create Event</h6>
+      <form method="post" action="/admin/events" class="row g-2 small">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="col-8"><input type="text" name="title" class="form-control form-control-sm" placeholder="Event Title" required></div>
+        <div class="col-4">
+          <select name="category" class="form-select form-select-sm">
+            <option>Concert</option><option>Workshop</option><option>Seminar</option><option>Conference</option>
+          </select>
+        </div>
+        <div class="col-12">
+          <select name="venue_id" class="form-select form-select-sm">
+            {% for v in venues %}<option value="{{ v.id }}">{{ v.name }} (Max Cap: {{ v.capacity }})</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-6"><label>Start (UTC)</label><input type="datetime-local" name="start_time" class="form-control form-control-sm" required></div>
+        <div class="col-6"><label>End (UTC)</label><input type="datetime-local" name="end_time" class="form-control form-control-sm" required></div>
+        <div class="col-12"><input type="text" name="description" class="form-control form-control-sm" placeholder="Description"></div>
+        <div class="col-5"><input type="text" name="cat_name" class="form-control form-control-sm" value="General" required></div>
+        <div class="col-3"><input type="number" step="0.01" name="cat_price" class="form-control form-control-sm" placeholder="Price" value="10" required></div>
+        <div class="col-4"><input type="number" name="cat_qty" class="form-control form-control-sm" placeholder="Qty" value="50" required></div>
+        <div class="col-6 d-grid"><button name="action" value="draft" class="btn btn-sm btn-outline-secondary">Save Draft</button></div>
+        <div class="col-6 d-grid"><button name="action" value="publish" class="btn btn-sm btn-primary">Publish Event</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-6">
+    <div class="card p-3">
+      <h6>Create / Edit Venue</h6>
+      <form method="post" action="/admin/venues" class="row g-2 small">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="col-4">
+          <select name="venue_id" class="form-select form-select-sm">
+            <option value="">+ New Venue</option>
+            {% for v in venues %}<option value="{{ v.id }}">Edit #{{ v.id }} {{ v.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-8"><input type="text" name="name" class="form-control form-control-sm" placeholder="Venue Name" required></div>
+        <div class="col-6"><input type="text" name="location" class="form-control form-control-sm" placeholder="Location" required></div>
+        <div class="col-3"><input type="number" name="capacity" class="form-control form-control-sm" placeholder="Capacity" required></div>
+        <div class="col-3"><input type="number" step="0.01" name="hourly_rate" class="form-control form-control-sm" placeholder="$/hr" required></div>
+        <div class="col-12"><input type="text" name="image_url" class="form-control form-control-sm" placeholder="Image URL (optional)"></div>
+        <div class="col-12"><input type="text" name="description" class="form-control form-control-sm" placeholder="Description"></div>
+        <div class="col-6 form-check ms-2">
+          <input class="form-check-input" type="checkbox" name="open_for_private_hire" checked id="openHire">
+          <label class="form-check-label" for="openHire">Open for private hire</label>
+        </div>
+        <div class="col-5 d-grid"><button class="btn btn-sm btn-dark">Save Venue</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+    <h6 class="mb-0">Agent Message Log</h6>
+    <form method="get" action="/admin" class="d-flex gap-2">
+      <input type="text" name="conv_id" value="{{ conv_id }}" class="form-control form-control-sm" placeholder="Filter conversation_id...">
+      <button class="btn btn-sm btn-outline-primary">Filter</button>
+    </form>
+  </div>
+  <div class="table-responsive" style="max-height: 360px;">
+    <table class="table table-sm table-striped small font-monospace">
+      <thead><tr><th>Conv ID</th><th>Sender &rarr; Receiver</th><th>Performative</th><th>Intent</th><th>Content</th></tr></thead>
+      <tbody>
+        {% for m in logs %}
+        <tr>
+          <td><a href="/admin?conv_id={{ m.conversation_id }}">{{ m.conversation_id }}</a></td>
+          <td>{{ m.sender }} &rarr; {{ m.receiver }}</td>
+          <td>
+            <span class="badge {% if m.performative in ['AGREE','INFORM'] %}bg-success{% elif m.performative == 'PROPOSE' %}bg-warning text-dark{% elif m.performative in ['REFUSE','FAILURE'] %}bg-danger{% else %}bg-primary{% endif %}">
+              {{ m.performative }}
+            </span>
+          </td>
+          <td>{{ m.intent }}</td>
+          <td>{{ m.content }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+  const canvas = document.getElementById('salesChart');
+  const labels = JSON.parse(canvas.dataset.labels || '[]');
+  const soldData = JSON.parse(canvas.dataset.sold || '[]');
+  const checkedInData = JSON.parse(canvas.dataset.checkedIn || '[]');
+
+  new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Tickets Sold', data: soldData, backgroundColor: '#0d6efd' },
+        { label: 'Checked In', data: checkedInData, backgroundColor: '#198754' }
+      ]
+    },
+    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+  });
+</script>
+{% endblock %}

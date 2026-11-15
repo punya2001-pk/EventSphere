@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card p-3 mx-auto" style="max-width: 520px;">
+  <h4 class="mb-2">Gate Entrance Scanner</h4>
+
+  {% if scan_result %}
+    <div class="alert {% if scan_result.admitted %}alert-success{% else %}alert-danger{% endif %}">
+      <h5 class="mb-1">{{ scan_result.verdict }}</h5>
+      <div>{{ scan_result.reason }}</div>
+      <div class="small font-monospace mt-1">Code: {{ scan_result.code }}</div>
+      {% if scan_result.suspicious %}
+        <div class="mt-2 badge bg-dark">SECURITY ALERT: Repeated scan threshold reached!</div>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <form id="scanForm" method="post" action="/scanner/verify">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="mb-2">
+      <label class="form-label small fw-bold">Active Event Gate</label>
+      <select name="event_id" class="form-select" required>
+        {% for ev in events %}
+          <option value="{{ ev.id }}" {% if ev.id == selected_event_id %}selected{% endif %}>{{ ev.title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div id="reader" class="mb-2 rounded overflow-hidden border"></div>
+
+    <div class="mb-2">
+      <label class="form-label small fw-bold">Ticket Code (Auto-filled by camera or enter manually)</label>
+      <input type="text" id="codeInput" name="code" class="form-control font-monospace" placeholder="EVT-..." required>
+    </div>
+    <button class="btn btn-primary w-100">Verify & Admit Ticket</button>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+  const html5QrCode = new Html5Qrcode("reader");
+  html5QrCode.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: { width: 220, height: 220 } },
+    (decodedText) => {
+      document.getElementById("codeInput").value = decodedText;
+      html5QrCode.stop().then(() => document.getElementById("scanForm").submit());
+    },
+    () => {}
+  ).catch(() => {
+    document.getElementById("reader").innerHTML = '<div class="p-2 small text-muted">Camera unavailable or permission denied — use manual code entry below.</div>';
+  });
+</script>
+{% endblock %}
