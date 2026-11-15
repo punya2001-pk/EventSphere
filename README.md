@@ -34,7 +34,7 @@ Create a .env file in the repository root and configure your environment variabl
 
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 
-# Sample .env
+## Sample .env
 
 SECRET_KEY=replace_with_a_generated_secret_at_least_32_characters_long
  DATABASE_URL="Database_URL_Here"
@@ -80,6 +80,8 @@ Attendee:
 Email - student@eventsphere.edu
 Password - Password123!
 
+## Automated Pytest Suite
 
+pytest -v
 
         
